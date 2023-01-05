@@ -378,13 +378,13 @@ go test proof
 echo '{
     "id": 2,
     "jsonrpc": "2.0",
-    "method": "update_memory_smt",
+    "method": "update_db_smt",
     "params": {
         "opt":{
             "get_proof":true,
             "get_root":true
         },
-        "smt_name":"fasdf",
+        "smt_name":"tree101",
         "data":[
             {
                 "key":  "0000000000000000000000000000000000000000000000000000000000000000",
@@ -403,6 +403,34 @@ echo '{
                 "value":"44ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
             }
         ]
+    }
+}' \
+| curl -H 'content-type: application/json' -d @- \
+http://localhost:10000
+```
+
+remove tree
+```shell
+echo '{
+    "id": 2,
+    "jsonrpc": "2.0",
+    "method": "delete_smt",
+    "params": {
+        "smt_name":"tree100"
+    }
+}' \
+| curl -H 'content-type: application/json' -d @- \
+http://localhost:10000
+```
+
+
+```shell
+echo '{
+    "id": 2,
+    "jsonrpc": "2.0",
+    "method": "get_smt_root",
+    "params": {
+        "smt_name":"tree101"
     }
 }' \
 | curl -H 'content-type: application/json' -d @- \
