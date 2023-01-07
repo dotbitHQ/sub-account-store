@@ -45,6 +45,13 @@ pub struct Response {
     pub(crate) proofs: HashMap<String, String>,
 }
 
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ResponseSequence {
+    pub(crate) roots: HashMap<String, String>,
+    pub(crate) proofs: HashMap<String, String>,
+}
+
 pub type MemoryStoreSMT = SparseMerkleTree<Blake2bHasherCustom, SmtValue, DefaultStore<SmtValue>>;
 
 pub(crate) type DefaultStoreMultiSMT<'a, T, W> =

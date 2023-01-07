@@ -9,16 +9,13 @@ use serde_with::serde_as;
 use super::{
     default_store::DefaultStoreMultiTree,
     structures::{
-        DefaultStoreMultiSMT, MemoryStoreSMT, Opt, Pair, Response, SmtKey, SmtProof, SmtRoot,
-        SmtValue,
+        DefaultStoreMultiSMT, MemoryStoreSMT, Opt, Pair, Response, ResponseSequence,
+        SmtKey, SmtProof, SmtRoot, SmtValue,
     },
     utils::slice_to_hex_string,
 };
 use rayon::prelude::*;
-use sparse_merkle_tree::{
-    traits::{StoreWriteOps, Value},
-    BranchKey, H256,
-};
+use sparse_merkle_tree::{traits::{StoreWriteOps, Value}, BranchKey, H256, CompiledMerkleProof};
 
 pub struct RpcServerImpl {
     db: OptimisticTransactionDB,
@@ -51,6 +48,15 @@ pub trait Rpc {
         smt_name: &str,
         data: Vec<Pair>,
     ) -> Result<Response, Error>;
+
+    #[method(name = "update_db_smt_middle")]
+    async fn update_rocksdb_smt_sequence(
+        &self,
+        opt: Opt,
+        smt_name: &str,
+        data: Vec<Pair>,
+    ) -> Result<ResponseSequence, Error>;
+
 
     #[method(name = "get_smt_root")]
     async fn get_smt_root(&self, smt_name: &str) -> Result<SmtRoot, Error>;
@@ -145,7 +151,7 @@ impl RpcServer for RpcServerImpl {
         let mut rocksdb_store_smt = DefaultStoreMultiSMT::new_with_store(
             DefaultStoreMultiTree::new(smt_name.as_bytes(), &tx),
         )
-        .unwrap();
+            .unwrap();
         let kvs: Vec<(H256, SmtValue)> = kvs_in
             .clone()
             .into_par_iter()
@@ -205,12 +211,81 @@ impl RpcServer for RpcServerImpl {
         };
         Ok(r)
     }
+
+
+    async fn update_rocksdb_smt_sequence(
+        &self,
+        opt: Opt,
+        smt_name: &str,
+        kvs_in: Vec<Pair>,
+    ) -> Result<ResponseSequence, Error> {
+        let get_root = opt.get_root;
+        let get_proof = opt.get_proof;
+
+        //Todo multi thread support
+        let tx = self.db.transaction_default();
+        let mut rocksdb_store_smt = DefaultStoreMultiSMT::new_with_store(
+            DefaultStoreMultiTree::new(smt_name.as_bytes(), &tx),
+        )
+            .unwrap();
+        let kvs: Vec<(H256, SmtValue)> = kvs_in
+            .clone()
+            .into_par_iter()
+            .map(|k| (k.key.0.into(), k.value))
+            .collect();
+
+        let mut hashmap_roots = HashMap::new();
+        let mut hashmap_proofs = HashMap::new();
+        for (k, v) in kvs {
+
+            {
+                rocksdb_store_smt
+                    .update(k, v)
+                    .expect("update error");
+                tx.commit().expect("db commit error");
+
+            };
+            let smt_root = rocksdb_store_smt.root();
+
+
+            let compiled_proof =  if get_proof{
+                let mut vec = vec![];
+                vec.push(k);
+                let smt_proof = rocksdb_store_smt
+                    .merkle_proof(vec.clone())
+                    .expect("merkle_proof error");
+                smt_proof.clone().compile(vec).expect("compile error")
+            }else {
+                let v: Vec<u8> = Vec::new();
+                let smt_proof = CompiledMerkleProof(v);
+                smt_proof
+            };
+
+            let root = slice_to_hex_string(smt_root.as_slice());
+            let proof = slice_to_hex_string(compiled_proof.0.as_slice());
+            hashmap_roots.insert(slice_to_hex_string(k.as_slice()), root);
+            hashmap_proofs.insert(slice_to_hex_string(k.as_slice()), proof);
+        }
+
+        let r = if !get_root {
+            ResponseSequence {
+                roots: hashmap_roots,
+                proofs: hashmap_proofs,
+            }
+        } else {
+            ResponseSequence {
+                roots: hashmap_roots,
+                proofs: hashmap_proofs,
+            }
+        };
+        Ok(r)
+    }
     async fn get_smt_root(&self, smt_name: &str) -> Result<SmtRoot, Error> {
         let snapshot = self.db.snapshot();
         let rocksdb_store_smt = DefaultStoreMultiSMT::new_with_store(
             DefaultStoreMultiTree::<_, ()>::new(smt_name.as_bytes(), &snapshot),
         )
-        .expect("cannot get smt storage");
+            .expect("cannot get smt storage");
         let smt_root = rocksdb_store_smt.root().into();
         Ok(smt_root)
     }
@@ -220,7 +295,7 @@ impl RpcServer for RpcServerImpl {
         let mut rocksdb_store_smt = DefaultStoreMultiSMT::new_with_store(
             DefaultStoreMultiTree::new(smt_name.as_bytes(), &tx),
         )
-        .unwrap();
+            .unwrap();
         let root = rocksdb_store_smt.root();
         let branch_key = BranchKey {
             height: 255,

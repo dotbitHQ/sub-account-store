@@ -436,3 +436,39 @@ echo '{
 | curl -H 'content-type: application/json' -d @- \
 http://localhost:10000
 ```
+
+test sequence 
+```shell
+echo '{
+    "id": 2,
+    "jsonrpc": "2.0",
+    "method": "update_db_smt_middle",
+    "params": {
+        "opt":{
+            "get_proof":true,
+            "get_root":true
+        },
+        "smt_name":"tree101",
+        "data":[
+            {
+                "key":  "0000000000000000000000000000000000000000000000000000000000000000",
+                "value":"00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            },
+            {
+                "key":  "0100000000000000000000000000000000000000000000000000000000000000",
+                "value":"11ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            },
+            {
+                "key":  "0300000000000000000000000000000000000000000000000000000000000000",
+                "value":"33ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            },
+            {
+                "key":  "0400000000000000000000000000000000000000000000000000000000000000",
+                "value":"44ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            }
+        ]
+    }
+}' \
+| curl -H 'content-type: application/json' -d @- \
+http://localhost:10000
+```

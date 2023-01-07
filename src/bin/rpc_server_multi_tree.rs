@@ -12,7 +12,7 @@ struct Args {
     listen_addr: String,
 
     //database path of rocksdb
-    #[arg(short, long, default_value = "/tmp/smt/store")]
+    #[arg(short, long, default_value = "/tmp/smt-store")]
     db_path: String,
 }
 
