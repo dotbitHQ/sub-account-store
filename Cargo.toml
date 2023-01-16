@@ -15,7 +15,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_with = { version = "2.0", features = ["hex"] }
 rayon  = "1.5.1"
-clap = { version = "4.0.32", features = ["derive"] }
+clap = { version = "3.2.22", features = ["derive"] } #if use 4.xx, then rustc must > 1.61
 log = "0.4"
 futures = "0.3"
 opentelemetry = { version = "0.17", features = ["rt-tokio"] }

@@ -10,6 +10,7 @@ docker-build:
 		-v ${current_dir}:/app \
 		nervos/ckb-docker-builder:bionic-rust-1.61.0 \
 		/bin/bash -c "cd /app && cargo build --release"
+	mkdir ./build
 	cp ./docker/target/release/rpc_server ./build/rpc_server
 
 docker-image: docker-build

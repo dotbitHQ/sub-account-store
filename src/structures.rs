@@ -106,3 +106,50 @@ impl From<&H256> for SmtRoot {
         SmtRoot(root)
     }
 }
+
+
+const BYTES: usize = 32;
+#[derive(Default, Debug)]
+pub struct IteratorSmtKey {
+    cur_idx: usize,
+    cur_num: usize,
+}
+
+impl Iterator for IteratorSmtKey {
+    type Item = SmtKey;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.cur_num == 255 {
+            self.cur_idx += 1;
+            self.cur_num = 0;
+        }
+        let mut ret = [0u8;32];
+        for i in 0..BYTES {
+
+            if i < self.cur_idx {
+                ret[i] = 255u8;
+            }else if i > self.cur_idx{
+                continue;
+            }else {
+                ret[i] = self.cur_num as u8;
+                self.cur_num += 1;
+            }
+        }
+        if self.cur_idx == 255 && self.cur_num == 255 {
+            None
+        }else {
+            Some(SmtKey(ret))
+        }
+    }
+}
+
+impl SmtKey {
+    #[inline]
+    pub fn copy_new(&self) -> SmtKey {
+        let mut s = [0u8; 32];
+        for (i, v) in self.0.as_slice().iter().enumerate() {
+            s[i] = *v;
+        }
+        SmtKey(s)
+    }
+}

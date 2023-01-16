@@ -7,3 +7,4 @@ pub mod structures;
 #[cfg(test)]
 mod tests;
 pub mod utils;
+pub mod kv_store;

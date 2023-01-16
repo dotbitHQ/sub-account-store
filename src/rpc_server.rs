@@ -3,7 +3,7 @@ use jsonrpsee::{
     core::{async_trait, Error},
     proc_macros::rpc,
 };
-use rocksdb::{OptimisticTransaction, OptimisticTransactionDB};
+use rocksdb::{OptimisticTransactionDB};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use super::{
@@ -15,7 +15,10 @@ use super::{
     utils::slice_to_hex_string,
 };
 use rayon::prelude::*;
-use sparse_merkle_tree::{traits::{StoreWriteOps, Value}, BranchKey, H256, CompiledMerkleProof};
+use sparse_merkle_tree::{traits::{Value}, H256, CompiledMerkleProof};
+
+use crate::kv_store::{get_smt_tree_name, upgrade_smt_tree_version};
+
 
 pub struct RpcServerImpl {
     db: OptimisticTransactionDB,
@@ -146,6 +149,10 @@ impl RpcServer for RpcServerImpl {
         let get_root = opt.get_root;
         let get_proof = opt.get_proof;
 
+        let smt_name = get_smt_tree_name(smt_name);
+        //println!("smt_name = {}", smt_name);
+
+
         //Todo multi thread support
         let tx = self.db.transaction_default();
         let mut rocksdb_store_smt = DefaultStoreMultiSMT::new_with_store(
@@ -222,6 +229,9 @@ impl RpcServer for RpcServerImpl {
         let get_root = opt.get_root;
         let get_proof = opt.get_proof;
 
+        let smt_name = get_smt_tree_name(smt_name);
+        //println!("smt_name = {}", smt_name);
+
         //Todo multi thread support
         let tx = self.db.transaction_default();
         let mut rocksdb_store_smt = DefaultStoreMultiSMT::new_with_store(
@@ -281,6 +291,9 @@ impl RpcServer for RpcServerImpl {
         Ok(r)
     }
     async fn get_smt_root(&self, smt_name: &str) -> Result<SmtRoot, Error> {
+        let smt_name = get_smt_tree_name(smt_name);
+        //println!("smt_name = {}", smt_name);
+
         let snapshot = self.db.snapshot();
         let rocksdb_store_smt = DefaultStoreMultiSMT::new_with_store(
             DefaultStoreMultiTree::<_, ()>::new(smt_name.as_bytes(), &snapshot),
@@ -291,19 +304,9 @@ impl RpcServer for RpcServerImpl {
     }
 
     async fn delete_smt(&self, smt_name: &str) -> Result<OperationResult, Error> {
-        let tx = self.db.transaction_default();
-        let mut rocksdb_store_smt = DefaultStoreMultiSMT::new_with_store(
-            DefaultStoreMultiTree::new(smt_name.as_bytes(), &tx),
-        )
-            .unwrap();
-        let root = rocksdb_store_smt.root();
-        let branch_key = BranchKey {
-            height: 255,
-            node_key: *root,
-        };
-        let mut store = rocksdb_store_smt.store_mut();
-        <DefaultStoreMultiTree<'_, OptimisticTransaction, ()> as StoreWriteOps<SmtValue>>::remove_branch(&mut store, &branch_key).expect("cannot remove branch");
-        Ok(OperationResult(true))
+        println!("delete_smt");
+        let ret = upgrade_smt_tree_version(smt_name);
+        Ok(OperationResult(ret))
     }
 
 
