@@ -7,6 +7,14 @@ use sparse_merkle_tree::default_store::DefaultStore;
 use sparse_merkle_tree::traits::Value;
 use sparse_merkle_tree::{SparseMerkleTree, H256};
 use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
+
+use lazy_static::lazy_static;
+
+lazy_static! {
+    pub static ref DBPATH: Arc<RwLock<String>> = Arc::new(RwLock::new(String::new()));
+
+}
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -152,4 +160,14 @@ impl SmtKey {
         }
         SmtKey(s)
     }
+}
+
+
+pub fn save_db_path(db_path: &String) {
+    let mut db = DBPATH.write().expect("cannot get lock");
+    db.push_str(db_path);
+}
+pub fn get_db_path() -> String {
+    let db = DBPATH.read().expect("cannot read lock");
+    String::from(db.as_str())
 }

@@ -3,7 +3,9 @@
 use rocksdb::DB;
 use std::sync::Arc;
 use rocksdb::prelude::{Delete, Get, Open, Put};
-const VERSION_DB_PATH: &str = "/tmp/smt-store/version";
+use crate::structures::get_db_path;
+
+const VERSION_DB_SUFFIX: &str = "/version";
 pub trait KVStore {
     fn init(file_path: &str) -> Self;
     fn save(&self, k: &str, v: &str) -> bool;
@@ -42,10 +44,14 @@ impl KVStore for RocksDB {
         self.db.delete(k.as_bytes()).is_ok()
     }
 }
-
+fn get_version_db_path() -> String {
+    let mut db_path = get_db_path();
+    db_path.push_str(VERSION_DB_SUFFIX);
+    db_path
+}
 pub fn get_smt_tree_name(smt_name: &str) -> String {
     //init db
-    let db: RocksDB= KVStore::init(VERSION_DB_PATH);
+    let db: RocksDB= KVStore::init(get_version_db_path().as_str());
     //get smt_name version
     match db.find(smt_name) {
         Some(v) => {  //if existed then get
@@ -65,7 +71,7 @@ pub fn get_smt_tree_name(smt_name: &str) -> String {
 
 pub fn upgrade_smt_tree_version(smt_name: &str) -> bool {
     //init db
-    let db: RocksDB= KVStore::init(VERSION_DB_PATH);
+    let db: RocksDB= KVStore::init(get_version_db_path().as_str());
     //get smt_name version
     match db.find(smt_name) {
         Some(v) => {  //if existed then get

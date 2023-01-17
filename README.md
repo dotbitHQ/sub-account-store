@@ -7,6 +7,7 @@ You can specify two parameters:
 * `-l` specifies the listening address and port, the default is `127.0.0.1:10000`
 * `-s` specifies the path to the store database, the default is `/tmp/smt-store`
 ### Docker
+Depending on your installation environment, you may need to add `sudo` to obtain authorization.
 ```shell
 make docker-build
 make docker-image
