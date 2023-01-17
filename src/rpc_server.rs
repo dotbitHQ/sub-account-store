@@ -3,7 +3,6 @@ use jsonrpsee::{
     core::{async_trait, Error},
     proc_macros::rpc,
 };
-use rocksdb::{OptimisticTransactionDB};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use super::{
@@ -16,8 +15,10 @@ use super::{
 };
 use rayon::prelude::*;
 use sparse_merkle_tree::{traits::{Value}, H256, CompiledMerkleProof};
-
-use crate::kv_store::{get_smt_tree_name, upgrade_smt_tree_version};
+use rocksdb::{
+    prelude::{Iterate}, OptimisticTransactionDB,
+};
+use rocksdb::{Direction, IteratorMode};
 
 
 pub struct RpcServerImpl {
@@ -65,7 +66,7 @@ pub trait Rpc {
     async fn get_smt_root(&self, smt_name: &str) -> Result<SmtRoot, Error>;
 
     #[method(name = "delete_smt")]
-    async fn delete_smt(&self, smt_name: &str) -> Result<OperationResult, Error>;
+    async fn delete_smt(&self, smt_name: &str) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -149,11 +150,6 @@ impl RpcServer for RpcServerImpl {
         let get_root = opt.get_root;
         let get_proof = opt.get_proof;
 
-        let smt_name = get_smt_tree_name(smt_name);
-        //println!("smt_name = {}", smt_name);
-
-
-        //Todo multi thread support
         let tx = self.db.transaction_default();
         let mut rocksdb_store_smt = DefaultStoreMultiSMT::new_with_store(
             DefaultStoreMultiTree::new(smt_name.as_bytes(), &tx),
@@ -174,7 +170,7 @@ impl RpcServer for RpcServerImpl {
             .update_all(kvs.clone().into())
             .expect("update error")
             .into();
-        //Todo to check consistency
+
         tx.commit().expect("db commit error");
 
         let smt_proofs = if !get_proof {
@@ -229,10 +225,6 @@ impl RpcServer for RpcServerImpl {
         let get_root = opt.get_root;
         let get_proof = opt.get_proof;
 
-        let smt_name = get_smt_tree_name(smt_name);
-        //println!("smt_name = {}", smt_name);
-
-        //Todo multi thread support
         let tx = self.db.transaction_default();
         let mut rocksdb_store_smt = DefaultStoreMultiSMT::new_with_store(
             DefaultStoreMultiTree::new(smt_name.as_bytes(), &tx),
@@ -291,9 +283,6 @@ impl RpcServer for RpcServerImpl {
         Ok(r)
     }
     async fn get_smt_root(&self, smt_name: &str) -> Result<SmtRoot, Error> {
-        let smt_name = get_smt_tree_name(smt_name);
-        //println!("smt_name = {}", smt_name);
-
         let snapshot = self.db.snapshot();
         let rocksdb_store_smt = DefaultStoreMultiSMT::new_with_store(
             DefaultStoreMultiTree::<_, ()>::new(smt_name.as_bytes(), &snapshot),
@@ -303,11 +292,34 @@ impl RpcServer for RpcServerImpl {
         Ok(smt_root)
     }
 
-    async fn delete_smt(&self, smt_name: &str) -> Result<OperationResult, Error> {
+    async fn delete_smt(&self, smt_name: &str) -> Result<(), Error> {
         println!("delete_smt");
-        let ret = upgrade_smt_tree_version(smt_name);
-        Ok(OperationResult(ret))
-    }
+        // OptimisticTransactionDB does not support delete_range, so we have to iterate all keys and update them to zero as a workaround
+        let snapshot = self.db.snapshot();
+        let prefix = smt_name.as_bytes();
+        let prefix_len = prefix.len();
+        let leaf_key_len = prefix_len + 32;
+        let kvs: Vec<(H256, SmtValue)> = snapshot
+            .iterator(IteratorMode::From(prefix, Direction::Forward))
+            .take_while(|(k, _)| k.starts_with(prefix))
+            .filter_map(|(k, _)| {
+                if k.len() != leaf_key_len {
+                    None
+                } else {
+                    let leaf_key: [u8; 32] = k[prefix_len..].try_into().expect("checked 32 bytes");
+                    Some((leaf_key.into(), SmtValue::zero()))
+                }
+            })
+            .collect();
 
+        let tx = self.db.transaction_default();
+        let mut rocksdb_store_smt =
+            DefaultStoreMultiSMT::new_with_store(DefaultStoreMultiTree::new(smt_name.as_bytes(), &tx))
+                .unwrap();
+        rocksdb_store_smt.update_all(kvs).expect("update_all error");
+        tx.commit().expect("db commit error");
+        assert_eq!(rocksdb_store_smt.root(), &H256::zero());
+        Ok(())
+    }
 
 }

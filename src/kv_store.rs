@@ -55,10 +55,6 @@ pub fn get_smt_tree_name(smt_name: &str) -> String {
     //get smt_name version
     match db.find(smt_name) {
         Some(v) => {  //if existed then get
-            // let mut ret = String::new();
-            // ret.push_str(smt_name);
-            // ret.push_str(v.as_str());
-            // ret.as_str()
             format!("{}_{}", smt_name, v)
         },
         None => {     //if none then insert

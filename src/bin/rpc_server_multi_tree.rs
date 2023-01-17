@@ -4,7 +4,6 @@ use rocksdb::{prelude::Open, OptimisticTransactionDB};
 use std::net::SocketAddr;
 
 use sub_account_store::rpc_server::{RpcServer, RpcServerImpl};
-use sub_account_store::structures::{save_db_path};
 
 
 
@@ -24,7 +23,6 @@ struct Args {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    save_db_path(&args.db_path);
 
     let db = OptimisticTransactionDB::open_default(args.db_path).expect("cannot open database");
     let server = HttpServerBuilder::default()

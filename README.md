@@ -5,7 +5,7 @@ This is a rust implementation of a [sparse merkle tree](https://github.com/nervo
 ### Commands
 You can specify two parameters:
 * `-l` specifies the listening address and port, the default is `127.0.0.1:10000`
-* `-s` specifies the path to the store database, the default is `/tmp/smt-store`
+* `-d` specifies the path to the store database, the default is `/tmp/smt-store`
 ### Docker
 Depending on your installation environment, you may need to add `sudo` to obtain authorization.
 ```shell
@@ -18,7 +18,7 @@ make docker-test
 
 ### Commands
 ```
-cargo run -l 127.0.0.1:10000 -s /tmp/smt-store-path
+cargo run -l 127.0.0.1:10000 -d /tmp/smt-store-path
 ```
 ### RPC request
 Here are some sample rpc requests for reference.
