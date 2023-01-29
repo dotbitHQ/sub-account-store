@@ -59,6 +59,18 @@ pub struct ResponseSequence {
     pub(crate) proofs: HashMap<String, String>,
 }
 
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ResponseDelete{
+    pub(crate) delete_result: bool,
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ResponseRoot{
+    pub(crate) root: SmtRoot,
+}
+
 pub type MemoryStoreSMT = SparseMerkleTree<Blake2bHasherCustom, SmtValue, DefaultStore<SmtValue>>;
 
 pub(crate) type DefaultStoreMultiSMT<'a, T, W> =

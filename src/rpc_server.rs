@@ -11,6 +11,7 @@ use jsonrpsee::{
     core::{async_trait, Error},
     proc_macros::rpc,
 };
+
 use log::{error, info, trace, warn};
 use rayon::prelude::*;
 use rocksdb::{prelude::Iterate, OptimisticTransactionDB};
@@ -19,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sparse_merkle_tree::{traits::Value, H256};
 use std::collections::HashMap;
+use crate::structures::{ResponseDelete, ResponseRoot};
 
 pub struct RpcServerImpl {
     db: OptimisticTransactionDB,
@@ -61,10 +63,10 @@ pub trait Rpc {
     ) -> Result<ResponseSequence, Error>;
 
     #[method(name = "get_smt_root")]
-    async fn get_smt_root(&self, smt_name: &str) -> Result<SmtRoot, Error>;
+    async fn get_smt_root(&self, smt_name: &str) -> Result<ResponseRoot, Error>;
 
     #[method(name = "delete_smt")]
-    async fn delete_smt(&self, smt_name: &str) -> Result<(), Error>;
+    async fn delete_smt(&self, smt_name: &str) -> Result<ResponseDelete, Error>;
 }
 
 #[async_trait]
@@ -376,7 +378,7 @@ impl RpcServer for RpcServerImpl {
         };
         Ok(r)
     }
-    async fn get_smt_root(&self, smt_name: &str) -> Result<SmtRoot, Error> {
+    async fn get_smt_root(&self, smt_name: &str) -> Result<ResponseRoot, Error> {
         info!("get smt root");
         let snapshot = self.db.snapshot();
         let rocksdb_store_smt =
@@ -392,10 +394,13 @@ impl RpcServer for RpcServerImpl {
             };
 
         let smt_root = rocksdb_store_smt.root().into();
-        Ok(smt_root)
+
+        Ok(ResponseRoot{
+            root: smt_root,
+        })
     }
 
-    async fn delete_smt(&self, smt_name: &str) -> Result<(), Error> {
+    async fn delete_smt(&self, smt_name: &str) -> Result<ResponseDelete, Error> {
         info!("delete smt tree : {}", &smt_name);
         // OptimisticTransactionDB does not support delete_range, so we have to iterate all keys and update them to zero as a workaround
         let snapshot = self.db.snapshot();
@@ -450,6 +455,11 @@ impl RpcServer for RpcServerImpl {
         } else {
             error!("delete smt tree {}: fail", &smt_name);
         }
-        Ok(())
+        // let mut builder = ObjectParams::new();
+        // builder.insert("delete_result", true);
+
+        Ok(ResponseDelete{
+            delete_result: true,
+        })
     }
 }
