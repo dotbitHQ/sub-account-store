@@ -1,12 +1,9 @@
 use clap::Parser;
 use jsonrpsee::http_server::HttpServerBuilder;
+use log::{error, info};
 use rocksdb::{prelude::Open, OptimisticTransactionDB};
 use std::net::SocketAddr;
-
 use sub_account_store::rpc_server::{RpcServer, RpcServerImpl};
-
-
-
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -22,13 +19,21 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let args = Args::parse();
+    env_logger::init();
 
-    let db = OptimisticTransactionDB::open_default(args.db_path).expect("cannot open database");
+    let args = Args::parse();
+    info!("opening database");
+    let db = match OptimisticTransactionDB::open_default(args.db_path) {
+        Ok(d) => d,
+        Err(e) => {
+            error!("cannot open database :{}", &e);
+            return Ok(());
+        }
+    };
     let server = HttpServerBuilder::default()
         .build(args.listen_addr.parse::<SocketAddr>()?)
         .await?;
     let _handle = server.start(RpcServerImpl::new(db).into_rpc())?;
-    println!("Server started at http://{}", args.listen_addr);
+    info!("server started at http://{}", args.listen_addr);
     futures::future::pending().await
 }

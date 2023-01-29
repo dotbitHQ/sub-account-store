@@ -16,7 +16,6 @@ serde_json = "1.0"
 serde_with = { version = "2.0", features = ["hex"] }
 rayon  = "1.5.1"
 clap = { version = "3.2.22", features = ["derive"] } #if use 4.xx, then rustc must > 1.61
-log = "0.4"
 futures = "0.3"
 opentelemetry = { version = "0.17", features = ["rt-tokio"] }
 opentelemetry-jaeger = { version = "0.16", features = ["rt-tokio"] }
@@ -27,6 +26,8 @@ tracing-opentelemetry = "0.17"
 tracing-subscriber = {version = "0.3", features = ["env-filter"]}
 blake2b-rs = "0.2.0"
 lazy_static = "1.4.0"
+log = "0.4.17"
+env_logger = "0.9.0"
 
 [features]
 default = ["trie"]

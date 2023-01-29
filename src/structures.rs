@@ -13,7 +13,6 @@ use lazy_static::lazy_static;
 
 lazy_static! {
     pub static ref DBPATH: Arc<RwLock<String>> = Arc::new(RwLock::new(String::new()));
-
 }
 
 #[serde_as]
@@ -47,7 +46,7 @@ pub struct Opt {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Response {
     pub(crate) root: SmtRoot,
     pub(crate) proofs: HashMap<String, String>,
@@ -115,7 +114,6 @@ impl From<&H256> for SmtRoot {
     }
 }
 
-
 const BYTES: usize = 32;
 #[derive(Default, Debug)]
 pub struct IteratorSmtKey {
@@ -131,21 +129,20 @@ impl Iterator for IteratorSmtKey {
             self.cur_idx += 1;
             self.cur_num = 0;
         }
-        let mut ret = [0u8;32];
+        let mut ret = [0u8; 32];
         for i in 0..BYTES {
-
             if i < self.cur_idx {
                 ret[i] = 255u8;
-            }else if i > self.cur_idx{
+            } else if i > self.cur_idx {
                 continue;
-            }else {
+            } else {
                 ret[i] = self.cur_num as u8;
                 self.cur_num += 1;
             }
         }
         if self.cur_idx == 255 && self.cur_num == 255 {
             None
-        }else {
+        } else {
             Some(SmtKey(ret))
         }
     }
@@ -161,7 +158,6 @@ impl SmtKey {
         SmtKey(s)
     }
 }
-
 
 pub fn save_db_path(db_path: &String) {
     let mut db = DBPATH.write().expect("cannot get lock");

@@ -1,9 +1,7 @@
-
-
+use crate::structures::get_db_path;
+use rocksdb::prelude::{Delete, Get, Open, Put};
 use rocksdb::DB;
 use std::sync::Arc;
-use rocksdb::prelude::{Delete, Get, Open, Put};
-use crate::structures::get_db_path;
 
 const VERSION_DB_SUFFIX: &str = "/version";
 pub trait KVStore {
@@ -18,7 +16,9 @@ pub struct RocksDB {
 }
 impl KVStore for RocksDB {
     fn init(file_path: &str) -> Self {
-        RocksDB { db: Arc::new(DB::open_default(file_path).unwrap()) }
+        RocksDB {
+            db: Arc::new(DB::open_default(file_path).unwrap()),
+        }
     }
     fn save(&self, k: &str, v: &str) -> bool {
         self.db.put(k.as_bytes(), v.as_bytes()).is_ok()
@@ -29,11 +29,11 @@ impl KVStore for RocksDB {
                 let result = String::from_utf8(v.to_owned()).unwrap();
                 println!("Finding '{}' returns '{}'", k, result);
                 Some(result)
-            },
+            }
             Ok(None) => {
                 println!("Finding '{}' returns None", k);
                 None
-            },
+            }
             Err(e) => {
                 println!("Error retrieving value for {}: {}", k, e);
                 None
@@ -51,26 +51,29 @@ fn get_version_db_path() -> String {
 }
 pub fn get_smt_tree_name(smt_name: &str) -> String {
     //init db
-    let db: RocksDB= KVStore::init(get_version_db_path().as_str());
+    let db: RocksDB = KVStore::init(get_version_db_path().as_str());
     //get smt_name version
     match db.find(smt_name) {
-        Some(v) => {  //if existed then get
+        Some(v) => {
+            //if existed then get
             format!("{}_{}", smt_name, v)
-        },
-        None => {     //if none then insert
+        }
+        None => {
+            //if none then insert
             let version = "0";
             db.save(smt_name, version);
             format!("{}_{}", smt_name, version)
-        },
+        }
     }
 }
 
 pub fn upgrade_smt_tree_version(smt_name: &str) -> bool {
     //init db
-    let db: RocksDB= KVStore::init(get_version_db_path().as_str());
+    let db: RocksDB = KVStore::init(get_version_db_path().as_str());
     //get smt_name version
     match db.find(smt_name) {
-        Some(v) => {  //if existed then get
+        Some(v) => {
+            //if existed then get
             match v.parse::<usize>() {
                 Ok(old_version) => {
                     let new_version = old_version + 1;
@@ -83,11 +86,11 @@ pub fn upgrade_smt_tree_version(smt_name: &str) -> bool {
                     false
                 }
             }
-        },
-        None => {     //if none then insert
-          println!("cannot find smt tree named :{}", smt_name);
+        }
+        None => {
+            //if none then insert
+            println!("cannot find smt tree named :{}", smt_name);
             false
-        },
+        }
     }
-
 }
