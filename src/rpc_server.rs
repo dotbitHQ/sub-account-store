@@ -14,14 +14,14 @@ use jsonrpsee::{
 
 use log::{debug, error, info, trace, warn};
 use rayon::prelude::*;
-use rocksdb::{prelude::Iterate, OptimisticTransactionDB};
+use rocksdb::{prelude::Iterate, OptimisticTransactionDB, OptimisticTransaction};
 use rocksdb::{Direction, IteratorMode};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sparse_merkle_tree::{traits::Value, H256};
 use std::collections::HashMap;
 
-const CHUNK_SIZE: usize = 4096;
+const CHUNK_SIZE: usize = 5000;
 
 pub struct RpcServerImpl {
     db: OptimisticTransactionDB,
@@ -208,7 +208,7 @@ impl RpcServer for RpcServerImpl {
             .map(|k| (k.key.0.into(), k.value))
             .collect();
 
-        info!("update start");
+        info!("update start， keys num = {}", kvs.len());
         for chunk in kvs.chunks(CHUNK_SIZE) {
             let _ = match rocksdb_store_smt.update_all(chunk.to_vec()) {
                 Ok(_) => {}
@@ -217,6 +217,7 @@ impl RpcServer for RpcServerImpl {
                     return Err(Error::Custom(e.to_string()));
                 }
             };
+            commit_to_database(&tx)?;
         }
         info!("update end");
 
@@ -232,15 +233,7 @@ impl RpcServer for RpcServerImpl {
         //     }
         // };
 
-        let _ = match tx.commit() {
-            Ok(_) => {
-                info!("database commit success");
-            }
-            Err(e) => {
-                error!("database commit failed : {}", &e);
-                return Err(Error::Custom(e.to_string()));
-            }
-        };
+
 
         let smt_proofs = if !get_proof {
             let mut smt_proofs = vec![];
@@ -343,6 +336,7 @@ impl RpcServer for RpcServerImpl {
         let mut hashmap_proofs = HashMap::new();
         for (k, v) in kvs {
             {
+                //info!("key = {} value = {}",      slice_to_hex_string(&k.as_slice()),                            slice_to_hex_string(&v.as_ref()));
                 match rocksdb_store_smt.update(k, v.clone()) {
                     Ok(_) => {}
                     Err(e) => {
@@ -355,17 +349,9 @@ impl RpcServer for RpcServerImpl {
                         break;
                     }
                 };
-                //tx.commit().expect("db commit error");
             }
-            let _ = match tx.commit() {
-                Ok(_) => {
-                    info!("database commit success");
-                }
-                Err(e) => {
-                    error!("database commit failed : {}", &e);
-                    return Err(Error::Custom(e.to_string()));
-                }
-            };
+
+
             let smt_root = rocksdb_store_smt.root();
 
             let compiled_proof = if !get_proof {
@@ -405,6 +391,7 @@ impl RpcServer for RpcServerImpl {
                 break;
             }
         }
+        commit_to_database(&tx)?;
 
         if hashmap_proofs.len() != kvs_len {
             error!("some keys cannot generate proof");
@@ -442,6 +429,8 @@ impl RpcServer for RpcServerImpl {
 
         Ok(smt_root)
     }
+
+
 
     async fn delete_smt(&self, smt_name: &str) -> Result<bool, Error> {
         info!("delete smt tree : {}", &smt_name);
@@ -484,8 +473,9 @@ impl RpcServer for RpcServerImpl {
             }
         };
 
-        info!("delete start");
-        for chunk in kvs.chunks(CHUNK_SIZE) {
+        info!("delete start keys num = {}", kvs.len());
+        let delete_chunk_size = CHUNK_SIZE * 10;
+        for chunk in kvs.chunks(delete_chunk_size) {
             let _ = match rocksdb_store_smt.update_all(chunk.to_vec()) {
                 Ok(_) => {}
                 Err(e) => {
@@ -493,12 +483,13 @@ impl RpcServer for RpcServerImpl {
                     return Err(Error::Custom(e.to_string()));
                 }
             };
+            commit_to_database(&tx)?;
         }
-        info!("delete end");
+
 
         // let smt_root = match rocksdb_store_smt.update_all(kvs) {
         //     Ok(root) => {
-        //         info!("update success");
+        //         info!("delete success");
         //         root
         //     }
         //     Err(e) => {
@@ -507,15 +498,10 @@ impl RpcServer for RpcServerImpl {
         //     }
         // };
 
-        let _ = match tx.commit() {
-            Ok(_) => {
-                info!("database commit success");
-            }
-            Err(e) => {
-                error!("database commit failed : {}", &e);
-                return Err(Error::Custom(e.to_string()));
-            }
-        };
+        info!("delete end");
+
+
+
         let smt_root = rocksdb_store_smt.root();
         if smt_root.eq(&H256::zero()) {
             info!("delete smt tree {}: success", &smt_name);
@@ -527,4 +513,17 @@ impl RpcServer for RpcServerImpl {
 
         Ok(true)
     }
+}
+
+fn commit_to_database(tx: &OptimisticTransaction) -> Result<(), Error>{
+    let _ = match tx.commit() {
+        Ok(_) => {
+            info!("database commit success");
+        }
+        Err(e) => {
+            error!("database commit failed : {}", &e);
+            return Err(Error::Custom(e.to_string()));
+        }
+    };
+    Ok(())
 }

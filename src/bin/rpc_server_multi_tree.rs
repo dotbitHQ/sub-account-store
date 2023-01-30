@@ -22,7 +22,28 @@ async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let args = Args::parse();
+
     info!("opening database");
+    // let mut opts = Options::default();
+    // opts.create_if_missing(true);
+    //opts.set_bytes_per_sync(1048576);
+    //opts.set_max_background_jobs(6);
+    //opts.set_keep_log_file_num(32);
+    //opts.set_level_compaction_dynamic_level_bytes(true);
+    // opts.set_write_buffer_size(128 * 1024 * 1024);
+    // opts.set_min_write_buffer_number_to_merge(1);
+    // opts.set_max_write_buffer_number(2);
+    // opts.set_max_write_buffer_size_to_maintain(16);
+    // opts.set_max_file_opening_threads(32);
+
+    // let db = match OptimisticTransactionDB::open(&opts, args.db_path) {
+    //     Ok(d) => d,
+    //     Err(e) => {
+    //         error!("cannot open database :{}", &e);
+    //         return Ok(());
+    //     }
+    // };
+    
     let db = match OptimisticTransactionDB::open_default(args.db_path) {
         Ok(d) => d,
         Err(e) => {
@@ -30,6 +51,7 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
     };
+    info!("opening database success");
     let server = HttpServerBuilder::default()
         .build(args.listen_addr.parse::<SocketAddr>()?)
         .await?;
