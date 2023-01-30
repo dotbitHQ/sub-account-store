@@ -12,7 +12,7 @@ use jsonrpsee::{
     proc_macros::rpc,
 };
 
-use log::{error, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use rayon::prelude::*;
 use rocksdb::{prelude::Iterate, OptimisticTransactionDB};
 use rocksdb::{Direction, IteratorMode};
@@ -20,6 +20,8 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use sparse_merkle_tree::{traits::Value, H256};
 use std::collections::HashMap;
+
+const CHUNK_SIZE: usize = 4096;
 
 pub struct RpcServerImpl {
     db: OptimisticTransactionDB,
@@ -182,11 +184,14 @@ impl RpcServer for RpcServerImpl {
         smt_name: &str,
         kvs_in: Vec<Pair>,
     ) -> Result<Response, Error> {
-        info!("update smt in the database in order");
+        info!("update smt in the database");
         let get_root = opt.get_root;
         let get_proof = opt.get_proof;
 
+        debug!("create transaction ");
         let tx = self.db.transaction_default();
+
+        debug!("get handle of smt store");
         let mut rocksdb_store_smt = match DefaultStoreMultiSMT::new_with_store(
             DefaultStoreMultiTree::new(smt_name.as_bytes(), &tx),
         ) {
@@ -203,18 +208,39 @@ impl RpcServer for RpcServerImpl {
             .map(|k| (k.key.0.into(), k.value))
             .collect();
 
-        let smt_root = match rocksdb_store_smt.update_all(kvs.into()) {
-            Ok(root) => {
-                info!("update success");
-                root.into()
+        info!("update start");
+        for chunk in kvs.chunks(CHUNK_SIZE) {
+            let _ = match rocksdb_store_smt.update_all(chunk.to_vec()) {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("update smt in database failed! : {}", &e);
+                    return Err(Error::Custom(e.to_string()));
+                }
+            };
+        }
+        info!("update end");
+
+        let smt_root = rocksdb_store_smt.root().into();
+        // let smt_root = match rocksdb_store_smt.update_all(kvs.into()) {
+        //     Ok(root) => {
+        //         info!("update success");
+        //         root.into()
+        //     }
+        //     Err(e) => {
+        //         error!("building smt in database failed! : {}", &e);
+        //         return Err(Error::Custom(e.to_string()));
+        //     }
+        // };
+
+        let _ = match tx.commit() {
+            Ok(_) => {
+                info!("database commit success");
             }
             Err(e) => {
-                error!("building smt in database failed! : {}", &e);
+                error!("database commit failed : {}", &e);
                 return Err(Error::Custom(e.to_string()));
             }
         };
-
-        tx.commit().expect("db commit error");
 
         let smt_proofs = if !get_proof {
             let mut smt_proofs = vec![];
@@ -292,8 +318,11 @@ impl RpcServer for RpcServerImpl {
 
         let get_root = opt.get_root;
         let get_proof = opt.get_proof;
+        let kvs_len = kvs_in.len();
 
         let tx = self.db.transaction_default();
+
+        debug!("get handle of smt store");
         let mut rocksdb_store_smt = match DefaultStoreMultiSMT::new_with_store(
             DefaultStoreMultiTree::new(smt_name.as_bytes(), &tx),
         ) {
@@ -303,6 +332,7 @@ impl RpcServer for RpcServerImpl {
                 return Err(Error::Custom(e.to_string()));
             }
         };
+
         let kvs: Vec<(H256, SmtValue)> = kvs_in
             .clone()
             .into_par_iter()
@@ -322,15 +352,24 @@ impl RpcServer for RpcServerImpl {
                             slice_to_hex_string(&k.as_slice()),
                             slice_to_hex_string(&v.as_ref())
                         );
-                        continue;
+                        break;
                     }
                 };
-                tx.commit().expect("db commit error");
+                //tx.commit().expect("db commit error");
+            }
+            let _ = match tx.commit() {
+                Ok(_) => {
+                    info!("database commit success");
+                }
+                Err(e) => {
+                    error!("database commit failed : {}", &e);
+                    return Err(Error::Custom(e.to_string()));
+                }
             };
             let smt_root = rocksdb_store_smt.root();
 
             let compiled_proof = if !get_proof {
-                get_empty_compiled_proof()
+                Some(get_empty_compiled_proof())
             } else {
                 let mut vec = vec![];
                 vec.push(k);
@@ -347,23 +386,30 @@ impl RpcServer for RpcServerImpl {
                 };
                 if let Some(p) = proof {
                     match p.clone().compile(vec) {
-                        Ok(compiled_proof) => compiled_proof,
+                        Ok(compiled_proof) => Some(compiled_proof),
                         Err(e) => {
                             error!("unable to generate compiled proof : {}", &e);
-                            get_empty_compiled_proof()
+                            None
                         }
                     }
                 } else {
-                    get_empty_compiled_proof()
+                    None
                 }
             };
-
-            let root = slice_to_hex_string(smt_root.as_slice());
-            let proof = slice_to_hex_string(compiled_proof.0.as_slice());
-            hashmap_roots.insert(slice_to_hex_string(k.as_slice()), root);
-            hashmap_proofs.insert(slice_to_hex_string(k.as_slice()), proof);
+            if let Some(cp) = compiled_proof {
+                let root = slice_to_hex_string(smt_root.as_slice());
+                let proof = slice_to_hex_string(cp.0.as_slice());
+                hashmap_roots.insert(slice_to_hex_string(k.as_slice()), root);
+                hashmap_proofs.insert(slice_to_hex_string(k.as_slice()), proof);
+            } else {
+                break;
+            }
         }
 
+        if hashmap_proofs.len() != kvs_len {
+            error!("some keys cannot generate proof");
+            return Err(Error::Custom("e".to_string()));
+        }
         let r = if !get_root {
             ResponseSequence {
                 roots: hashmap_roots,
@@ -426,6 +472,8 @@ impl RpcServer for RpcServerImpl {
             .collect();
 
         let tx = self.db.transaction_default();
+
+        debug!("get handle of smt store");
         let mut rocksdb_store_smt = match DefaultStoreMultiSMT::new_with_store(
             DefaultStoreMultiTree::new(smt_name.as_bytes(), &tx),
         ) {
@@ -435,18 +483,40 @@ impl RpcServer for RpcServerImpl {
                 return Err(Error::Custom(e.to_string()));
             }
         };
-        let smt_root = match rocksdb_store_smt.update_all(kvs) {
-            Ok(root) => {
-                info!("update success");
-                root
+
+        info!("delete start");
+        for chunk in kvs.chunks(CHUNK_SIZE) {
+            let _ = match rocksdb_store_smt.update_all(chunk.to_vec()) {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("delete smt in database failed! : {}", &e);
+                    return Err(Error::Custom(e.to_string()));
+                }
+            };
+        }
+        info!("delete end");
+
+        // let smt_root = match rocksdb_store_smt.update_all(kvs) {
+        //     Ok(root) => {
+        //         info!("update success");
+        //         root
+        //     }
+        //     Err(e) => {
+        //         error!("building smt in database failed! : {}", &e);
+        //         return Err(Error::Custom(e.to_string()));
+        //     }
+        // };
+
+        let _ = match tx.commit() {
+            Ok(_) => {
+                info!("database commit success");
             }
             Err(e) => {
-                error!("building smt in database failed! : {}", &e);
+                error!("database commit failed : {}", &e);
                 return Err(Error::Custom(e.to_string()));
             }
         };
-
-        tx.commit().expect("db commit error");
+        let smt_root = rocksdb_store_smt.root();
         if smt_root.eq(&H256::zero()) {
             info!("delete smt tree {}: success", &smt_name);
         } else {
