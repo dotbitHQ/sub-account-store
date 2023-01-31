@@ -43,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
     //         return Ok(());
     //     }
     // };
-    
+
     let db = match OptimisticTransactionDB::open_default(args.db_path) {
         Ok(d) => d,
         Err(e) => {

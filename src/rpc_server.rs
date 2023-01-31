@@ -14,7 +14,7 @@ use jsonrpsee::{
 
 use log::{debug, error, info, trace, warn};
 use rayon::prelude::*;
-use rocksdb::{prelude::Iterate, OptimisticTransactionDB, OptimisticTransaction};
+use rocksdb::{prelude::Iterate, OptimisticTransaction, OptimisticTransactionDB};
 use rocksdb::{Direction, IteratorMode};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -233,8 +233,6 @@ impl RpcServer for RpcServerImpl {
         //     }
         // };
 
-
-
         let smt_proofs = if !get_proof {
             let mut smt_proofs = vec![];
             let k = format!("{:?}", SmtKey::default());
@@ -351,7 +349,6 @@ impl RpcServer for RpcServerImpl {
                 };
             }
 
-
             let smt_root = rocksdb_store_smt.root();
 
             let compiled_proof = if !get_proof {
@@ -430,8 +427,6 @@ impl RpcServer for RpcServerImpl {
         Ok(smt_root)
     }
 
-
-
     async fn delete_smt(&self, smt_name: &str) -> Result<bool, Error> {
         info!("delete smt tree : {}", &smt_name);
         // OptimisticTransactionDB does not support delete_range, so we have to iterate all keys and update them to zero as a workaround
@@ -474,7 +469,7 @@ impl RpcServer for RpcServerImpl {
         };
 
         info!("delete start keys num = {}", kvs.len());
-        let delete_chunk_size = CHUNK_SIZE * 10;
+        let delete_chunk_size = CHUNK_SIZE;
         for chunk in kvs.chunks(delete_chunk_size) {
             let _ = match rocksdb_store_smt.update_all(chunk.to_vec()) {
                 Ok(_) => {}
@@ -485,7 +480,6 @@ impl RpcServer for RpcServerImpl {
             };
             commit_to_database(&tx)?;
         }
-
 
         // let smt_root = match rocksdb_store_smt.update_all(kvs) {
         //     Ok(root) => {
@@ -500,8 +494,6 @@ impl RpcServer for RpcServerImpl {
 
         info!("delete end");
 
-
-
         let smt_root = rocksdb_store_smt.root();
         if smt_root.eq(&H256::zero()) {
             info!("delete smt tree {}: success", &smt_name);
@@ -515,7 +507,7 @@ impl RpcServer for RpcServerImpl {
     }
 }
 
-fn commit_to_database(tx: &OptimisticTransaction) -> Result<(), Error>{
+fn commit_to_database(tx: &OptimisticTransaction) -> Result<(), Error> {
     let _ = match tx.commit() {
         Ok(_) => {
             info!("database commit success");
