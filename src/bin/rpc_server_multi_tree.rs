@@ -24,6 +24,16 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     info!("opening database");
+
+    let db = match OptimisticTransactionDB::open_default(args.db_path) {
+        Ok(d) => d,
+        Err(e) => {
+            error!("cannot open database :{}", &e);
+            return Ok(());
+        }
+    };
+
+    //perhaps try tuning the database performance with the following parameters
     // let mut opts = Options::default();
     // opts.create_if_missing(true);
     //opts.set_bytes_per_sync(1048576);
@@ -44,13 +54,6 @@ async fn main() -> anyhow::Result<()> {
     //     }
     // };
 
-    let db = match OptimisticTransactionDB::open_default(args.db_path) {
-        Ok(d) => d,
-        Err(e) => {
-            error!("cannot open database :{}", &e);
-            return Ok(());
-        }
-    };
     info!("opening database success");
     let server = HttpServerBuilder::default()
         .build(args.listen_addr.parse::<SocketAddr>()?)

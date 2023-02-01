@@ -21,11 +21,11 @@ pub struct SmtKey(#[serde_as(as = "serde_with::hex::Hex")] pub(crate) [u8; 32]);
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct SmtValue(#[serde_as(as = "serde_with::hex::Hex")] [u8; 32]);
+pub struct SmtValue(#[serde_as(as = "serde_with::hex::Hex")] pub(crate) [u8; 32]);
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct SmtRoot(#[serde_as(as = "serde_with::hex::Hex")] [u8; 32]);
+pub struct SmtRoot(#[serde_as(as = "serde_with::hex::Hex")] pub(crate) [u8; 32]);
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
