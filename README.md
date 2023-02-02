@@ -8,11 +8,24 @@ You can specify two parameters:
 * `-d` specifies the path to the store database, the default is `/tmp/smt-store`
 ### Docker
 Depending on your installation environment, you may need to add `sudo` to obtain authorization.
+#### Development Debugging
 ```shell
 make docker-build
 make docker-image
 make docker-test
 ```
+
+#### Deployment 
+You can pull the official dotbit image directly and run the command to start the service.
+```shell
+ docker run --name sub-account-store \
+        --env RUST_LOG=Info \
+	-d --restart always \
+	-p 9130:9130 \
+	-v /mnt/somedata/sub-account-store:/app/data \
+	dotbitteam/sub-account-store:latest
+```
+Note that during deployment, use the `-v` parameter to specify the storage path on the host in order to ensure that no data is lost.
 
 ## Examples
 
